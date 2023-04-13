@@ -112,14 +112,14 @@ func processDirectory(curDir string, length int) {
 	os.Chdir(absPath)
 
 	for index, f := range all {
-		end := len(all) - 1
+		end := len(all) // 修正箇所
 		info1, err := f.Info()
 		if err != nil {
 			fmt.Println("Error getting file info:", err)
 			continue
 		}
 
-		for i := index + 1; i < end; i++ {
+		for i := index + 1; i < end; i++ { // 修正箇所
 			chked++
 
 			if len(f.Name()) < length {
