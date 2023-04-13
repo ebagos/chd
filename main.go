@@ -1,22 +1,96 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
+type Config struct {
+	Dir    string `json:"dir"`
+	Length int    `json:"length"`
+}
+
 func main() {
-	username := "username"
-	defaultDir := filepath.Join("C:", "Users", username, "Downloads")
-
-	dirPtr := flag.String("dir", defaultDir, "Directory to process")
-	lengthPtr := flag.Int("length", 15, "Length of characters to compare")
-
+	configFile := flag.String("config", "", "Path to the configuration file")
+	dirPtr := flag.String("dir", "", "Directory to process")
+	lengthPtr := flag.String("length", "", "Length of characters to compare")
 	flag.Parse()
 
-	processDirectory(*dirPtr, *lengthPtr)
+	config, err := readConfig(*configFile)
+	if err != nil {
+		fmt.Println("Error reading config file:", err)
+		return
+	}
+
+	dir := getSetting(*dirPtr, config.Dir, "PROCESS_DIR", "C:\\Users")
+	length := getSettingInt(*lengthPtr, config.Length, "PROCESS_LENGTH", 15)
+
+	processDirectory(dir, length)
+}
+
+func readConfig(configFile string) (*Config, error) {
+	if configFile == "" {
+		return &Config{}, nil
+	}
+
+	file, err := os.Open(configFile)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var config Config
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+func getSetting(cmdVal, fileVal, envKey, defaultVal string) string {
+	if cmdVal != "" {
+		return cmdVal
+	}
+
+	if fileVal != "" {
+		return fileVal
+	}
+
+	envVal := os.Getenv(envKey)
+	if envVal != "" {
+		return envVal
+	}
+
+	return defaultVal
+}
+
+func getSettingInt(cmdVal string, fileVal int, envKey string, defaultVal int) int {
+	if cmdVal != "" {
+		intVal, err := strconv.Atoi(cmdVal)
+		if err == nil {
+			return intVal
+		}
+	}
+
+	if fileVal != 0 {
+		return fileVal
+	}
+
+	envVal := os.Getenv(envKey)
+	if envVal != "" {
+		intVal, err := strconv.Atoi(envVal)
+		if err == nil {
+			return intVal
+		}
+	}
+
+	return defaultVal
 }
 
 func processDirectory(curDir string, length int) {
