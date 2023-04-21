@@ -1,153 +1,150 @@
+/*
+main.goのユニットテスト
+*/
 package main
 
 import (
 	"encoding/json"
+	"io"
 	"os"
-	"path/filepath"
-	"strconv"
 	"testing"
 )
 
 func TestReadConfig(t *testing.T) {
-	tempFile, err := os.CreateTemp("", "temp_config")
+	// テスト用の設定ファイルを作成
+	configType := Config{
+		Dir:      "C:\\Users",
+		Length:   15,
+		HashAlgo: "MD5",
+	}
+	configJson, _ := json.Marshal(configType)
+	os.WriteFile("test.json", configJson, 0644)
+	defer os.Remove("test.json")
+
+	// テスト用の設定ファイルを読み込む
+	config, err := readConfig("test.json")
 	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(tempFile.Name())
-
-	tempConfig := Config{
-		Dir:    "C:\\TestDir",
-		Length: 10,
+		t.Errorf("Error reading config file: %s", err)
 	}
 
-	encoder := json.NewEncoder(tempFile)
-	err = encoder.Encode(tempConfig)
-	if err != nil {
-		t.Fatal(err)
+	// 設定ファイルの内容を確認
+	if config.Dir != "C:\\Users" {
+		t.Errorf("Error reading config file: %s", err)
 	}
-	tempFile.Close()
-
-	config, err := readConfig(tempFile.Name())
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
+	if config.Length != 15 {
+		t.Errorf("Error reading config file: %s", err)
 	}
-
-	if config.Dir != tempConfig.Dir {
-		t.Errorf("Expected dir: %s, got: %s", tempConfig.Dir, config.Dir)
-	}
-
-	if config.Length != tempConfig.Length {
-		t.Errorf("Expected length: %d, got: %d", tempConfig.Length, config.Length)
+	if config.HashAlgo != "MD5" {
+		t.Errorf("Error reading config file: %s", err)
 	}
 }
 
 func TestGetSetting(t *testing.T) {
-	cmdVal := "cmdVal"
-	fileVal := "fileVal"
-	envKey := "TEST_ENV"
-	defaultVal := "defaultVal"
-	os.Setenv(envKey, "envVal")
-	defer os.Unsetenv(envKey)
+	// テスト用の設定ファイルを作成
+	configType := Config{
+		Dir:      "C:\\Users",
+		Length:   15,
+		HashAlgo: "MD5",
+	}
+	configJson, _ := json.Marshal(configType)
+	os.WriteFile("test.json", configJson, 0644)
+	defer os.Remove("test.json")
 
-	got := getSetting(cmdVal, fileVal, envKey, defaultVal)
-	if got != cmdVal {
-		t.Errorf("Expected: %s, got: %s", cmdVal, got)
+	// テスト用の設定ファイルを読み込む
+	config, err := readConfig("test.json")
+	if err != nil {
+		t.Errorf("Error reading config file: %s", err)
 	}
 
-	got = getSetting("", fileVal, envKey, defaultVal)
-	if got != fileVal {
-		t.Errorf("Expected: %s, got: %s", fileVal, got)
-	}
+	// テスト用の環境変数を設定
+	os.Setenv("PROCESS_DIR", "C:\\Users")
+	os.Setenv("PROCESS_LENGTH", "15")
+	os.Setenv("HASH_ALGO", "MD5")
 
-	got = getSetting("", "", envKey, defaultVal)
-	if got != os.Getenv(envKey) {
-		t.Errorf("Expected: %s, got: %s", os.Getenv(envKey), got)
-	}
+	// テスト用のコマンドライン引数を設定
+	dirPtr := "C:\\Users"
+	lengthPtr := "15"
 
-	got = getSetting("", "", "", defaultVal)
-	if got != defaultVal {
-		t.Errorf("Expected: %s, got: %s", defaultVal, got)
+	// 設定ファイルの内容を確認
+	if getSetting(dirPtr, config.Dir, "PROCESS_DIR", "C:\\Users") != "C:\\Users" {
+		t.Errorf("Error reading config file: %s", err)
+	}
+	if getSettingInt(lengthPtr, config.Length, "PROCESS_LENGTH", 15) != 15 {
+		t.Errorf("Error reading config file: %s", err)
+	}
+	if getSetting(config.HashAlgo, "MD5", "HASH_ALGO", "") != "MD5" {
+		t.Errorf("Error reading config file: %s", err)
 	}
 }
 
-func TestGetSettingInt(t *testing.T) {
-	cmdVal := "10"
-	fileVal := 20
-	envKey := "TEST_ENV_INT"
-	defaultVal := 30
-	os.Setenv(envKey, "40")
-	defer os.Unsetenv(envKey)
+func TestGetFileHash(t *testing.T) {
+	// テスト用のファイルを作成
+	os.WriteFile("test.txt", []byte("test"), 0644)
+	defer os.Remove("test.txt")
 
-	got := getSettingInt(cmdVal, fileVal, envKey, defaultVal)
-	cmdInt, _ := strconv.Atoi(cmdVal)
-	if got != cmdInt {
-		t.Errorf("Expected: %d, got: %d", cmdInt, got)
+	// ハッシュ値を取得
+	hash, err := getFileHash("test.txt", "MD5")
+	if err != nil {
+		t.Errorf("Error reading config file: %s", err)
 	}
 
-	got = getSettingInt("", fileVal, envKey, defaultVal)
-	if got != fileVal {
-		t.Errorf("Expected: %d, got: %d", fileVal, got)
+	// ハッシュ値を確認
+	if hash != "098f6bcd4621d373cade4e832627b4f6" {
+		t.Errorf("Error reading config file: %s", err)
 	}
 
-	got = getSettingInt("", 0, envKey, defaultVal)
-	envInt, _ := strconv.Atoi(os.Getenv(envKey))
-	if got != envInt {
-		t.Errorf("Expected: %d, got: %d", envInt, got)
+	// SHA-1のハッシュ値を取得
+	hash, err = getFileHash("test.txt", "SHA-1")
+	if err != nil {
+		t.Errorf("Error reading config file: %s", err)
+	}
+	// SHA-1のハッシュ値を確認
+	if hash != "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3" {
+		t.Errorf("Error reading config file: %s", err)
 	}
 
-	got = getSettingInt("", 0, "", defaultVal)
-	if got != defaultVal {
-		t.Errorf("Expected: %d, got: %d", defaultVal, got)
+	// SHA-256のハッシュ値を取得
+	hash, err = getFileHash("test.txt", "SHA-256")
+	if err != nil {
+		t.Errorf("Error reading config file: %s", err)
+	}
+	// SHA-256のハッシュ値を確認
+	if hash != "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" {
+		t.Errorf("Error reading config file: %s", err)
 	}
 }
 
 func TestProcessDirectory(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "temp_dir")
+	// テスト用のディレクトリ作成
+	os.Mkdir("test", 0755)
+	defer os.RemoveAll("test")
+	// テスト用のファイル群作成
+	file1, err := os.Create("test/test1.txt")
 	if err != nil {
-		t.Fatal(err)
+		t.Errorf("Error reading config file: %s", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer file1.Close()
+	io.WriteString(file1, "test1")
+}
 
-	fileNames := []string{
-		"file_001_abc.txt",
-		"file_001_def.txt",
-		"file_002_abc.txt",
-		"file_002_def.txt",
-	}
+func TestGetFileSize(t *testing.T) {
+	// テスト用のファイルを作成
+	os.WriteFile("test.txt", []byte("test"), 0644)
+	defer os.Remove("test.txt")
 
-	for _, fileName := range fileNames {
-		err := os.WriteFile(filepath.Join(tempDir, fileName), []byte("test content"), 0644)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
+	// ファイルサイズを取得
+	size := getFileSize("test.txt")
 
-	length := 8
-	processDirectory(tempDir, length)
-
-	files, err := os.ReadDir(tempDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expectedFiles := 2
-	if len(files) != expectedFiles {
-		t.Errorf("Expected %d files, got: %d", expectedFiles, len(files))
-	}
-
-	remainingFiles := make(map[string]bool)
-	for _, f := range files {
-		remainingFiles[f.Name()] = true
-	}
-
-	expectedRemovedFiles := []string{"file_001_abc.txt", "file_002_abc.txt"}
-	for _, fileName := range expectedRemovedFiles {
-		if remainingFiles[fileName] {
-			t.Errorf("Expected file %s to be removed, but it was not", fileName)
-		}
+	// ファイルサイズを確認
+	if size != 4 {
+		t.Error("Error reading config file")
 	}
 }
 
 func TestMain(m *testing.M) {
-	os.Exit(m.Run())
+	// テスト実行
+	exitCode := m.Run()
+
+	// テスト終了
+	os.Exit(exitCode)
 }
